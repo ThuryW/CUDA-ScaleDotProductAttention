@@ -12,7 +12,7 @@ find_package(CUDA REQUIRED)
 include_directories(${CUDA_INCLUDE_DIRS})
 
 # Add executable for the matrix multiplication test
-add_executable(test_matmul src/test_matmul.cu)
+add_executable(test_matmul tests/test_matmul.cu)
 
 # Link against CUDA and cuBLAS libraries
 target_link_libraries(test_matmul ${CUDA_LIBRARIES} ${CUDA_cublas_LIBRARY})
