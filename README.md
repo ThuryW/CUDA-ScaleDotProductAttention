@@ -9,6 +9,7 @@ cd build
 2. Run CMake to configure the project:
 ```bash
 cmake ..
+# /home/wangtianyu/tools/cmake/bin/cmake .. # use specific version of cmake
 ```
 3. Build the project:
 ```bash
@@ -16,7 +17,20 @@ make
 ```
 4. Execute the program:
 ```bash
-./test_matmul # or other test program
+./main random_test # or other test program
+```
+
+## Verify the result
+Currently, we use [Bert-base](https://github.com/google-research/bert) model parameters for test, which contains `12` attention heads, and the matrix size of each attention head is `128x64`.
+
+1. Generate random matrice as input
+```bash
+python ../scripts/generate_qk.py
+```
+2. Run your executive program
+3. Run the verification script
+```bash
+python ../scripts/verify_qk.py
 ```
 
 ## Requirements
