@@ -21,6 +21,7 @@ set(SOURCE
     src/matmul.cu
     src/inout.cu
     src/utils.cu
+    src/softmax.cu
 )
 
 add_executable(main ${SOURCE})
