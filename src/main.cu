@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
     int N = 128;         // Rows of Q and QK (sequence length)
     int M = 128;         // Columns of K^T and QK (sequence length)
     int d_k = 64;        // Columns of Q and rows of K^T (dimension of key/query)
+    int d_v = 64;        // Dimension of value vector (d_v = d_k for BERT-base)
     int block_size = 64; // Block size for matrix multiplication (can be different from softmax block)
 
     // Initialize cuBLAS
@@ -43,39 +44,51 @@ int main(int argc, char* argv[]) {
     std::vector<float*> d_KT(num_heads);
     std::vector<float*> d_QK(num_heads);
     std::vector<float*> d_attention_weights(num_heads);
+     std::vector<float*> d_V(num_heads);
+    std::vector<float*> d_O(num_heads);
     for (int i = 0; i < num_heads; i++) {
         cudaMalloc(&d_Q[i], N * d_k * sizeof(float));    // Q: N x d_k
         cudaMalloc(&d_K[i], M * d_k * sizeof(float));    // K: M x d_k (Note: M is seq_len_K, N is seq_len_Q. Here they are same)
         cudaMalloc(&d_KT[i], d_k * M * sizeof(float));   // K^T: d_k x M
         cudaMalloc(&d_QK[i], N * M * sizeof(float));     // QK^T: N x M
         cudaMalloc(&d_attention_weights[i], N * M * sizeof(float)); // attention: N x M
+        cudaMalloc(&d_V[i], M * d_v * sizeof(float));    // V: M x d_v
+        cudaMalloc(&d_O[i], N * d_v * sizeof(float));    // O: N x d_v
     }
 
     // Load Q and K from existing files
     for (int i = 0; i < num_heads; i++) {
         float* h_Q = new float[N * d_k];
         float* h_K = new float[M * d_k]; // M is correct for K's original number of rows
+        float* h_V = new float[M * d_v];
         
         std::string Q_file = "../data/random_test/Q_head_" + std::to_string(i) + ".txt";
         std::string K_file = "../data/random_test/K_head_" + std::to_string(i) + ".txt";
+        std::string V_file = "../data/random_test/V_head_" + std::to_string(i) + ".txt";
         
         loadMatrix(Q_file, h_Q, N, d_k);
         loadMatrix(K_file, h_K, M, d_k); // K is M rows, d_k columns
+        loadMatrix(V_file, h_V, M, d_v);
 
         // Save Q and K to random_verify
         std::string Q_save_file = "../data/random_verify/Q_head_" + std::to_string(i) + ".txt";
         std::string K_save_file = "../data/random_verify/K_head_" + std::to_string(i) + ".txt";
+        std::string V_save_file = "../data/random_verify/V_head_" + std::to_string(i) + ".txt";
         saveMatrix(Q_save_file, h_Q, N, d_k);
         saveMatrix(K_save_file, h_K, M, d_k);
+        saveMatrix(V_save_file, h_V, M, d_v);
 
         std::cout << "Q[head_" << i << "]: " << N << "x" << d_k << std::endl;
         std::cout << "K[head_" << i << "]: " << M << "x" << d_k << std::endl;
+        std::cout << "V[head_" << i << "]: " << M << "x" << d_v << std::endl;
         
         cudaMemcpy(d_Q[i], h_Q, N * d_k * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_K[i], h_K, M * d_k * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_V[i], h_V, M * d_v * sizeof(float), cudaMemcpyHostToDevice);
         
         delete[] h_Q;
         delete[] h_K;
+        delete[] h_V;
     }
 
     // Transpose K to K^T for all heads and save K^T
@@ -195,6 +208,22 @@ int main(int argc, char* argv[]) {
         std::cout << "Attention Weights[head_" << i << "]: " << N << "x" << M << std::endl;
         delete[] h_attention_weights;
     }
+    
+    // 加权和计算 (Attention * V)
+    std::cout << "\nComputing weighted sum (Attention * V)..." << std::endl;
+    batchedAttentionVMatmul(d_attention_weights, d_V, d_O, num_heads, N, M, d_v, handle);
+    cudaDeviceSynchronize();
+    std::cout << "Weighted sum computed successfully." << std::endl;
+
+    // 保存最终的输出结果到文件
+    for (int i = 0; i < num_heads; i++) {
+        float* h_O = new float[N * d_v];
+        cudaMemcpy(h_O, d_O[i], N * d_v * sizeof(float), cudaMemcpyDeviceToHost);
+        std::string output_file = "../data/random_verify/output_head_" + std::to_string(i) + ".txt";
+        saveMatrix(output_file, h_O, N, d_v);
+        std::cout << "Output[head_" << i << "]: " << N << "x" << d_v << std::endl;
+        delete[] h_O;
+    }
 
     // Cleanup
     for (int i = 0; i < num_heads; i++) {
@@ -203,6 +232,8 @@ int main(int argc, char* argv[]) {
         cudaFree(d_KT[i]);
         cudaFree(d_QK[i]);
         cudaFree(d_attention_weights[i]);
+        cudaFree(d_V[i]);
+        cudaFree(d_O[i]);
     }
     cublasDestroy(handle);
 

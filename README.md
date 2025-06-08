@@ -25,12 +25,12 @@ Currently, we use [bert-base](https://github.com/google-research/bert) model par
 
 1. Generate random matrices as input:
 ```bash
-python ../scripts/generate_qk.py
+python ../scripts/generate_random.py
 ```
 2. Run your executive program.
 3. Run the verification script:
 ```bash
-python ../scripts/verify_qk.py
+python ../scripts/verify.py
 ```
 
 ## Requirements
